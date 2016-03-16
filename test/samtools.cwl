@@ -1,51 +1,52 @@
 #!/usr/bin/env cwl-runner
 
-
-- id: "#samtools"
-  class: GGPCommandTool
+- id: "#pipeline"
+  class: CommandLineTool
   inputs:
-    - id: "#samtools-in-project-id"
+    - id: "#pipeline-project-id"
       type: string
       label: "Project Id"
       description: "google apps project id"
       inputBinding: {}
-    - id: "#samtools-in-service-account"
+    - id: "#pipeline-service-account"
       type: string
       label: "Service Account"
       description: "service account for google cloud compute"
-    - id: "#samtools-in-bucket"
+    - id: "#pipeline-bucket"
       type: string
       label: "Bucket"
       description: "google storage bucket name"
-    - id: "#samtools-in-input-file"
+    - id: "#pipeline-container"
+      type: string
+      label: "Bucket"
+      description: "docker container"
+    - id: "#pipeline-command"
+      type: string
+      label: "Bucket"
+      description: "command"
+    - id: "#pipeline-input-file"
       type: string
       label: "Input File"
-      description: "BAM file to act as input to samtools"
-    - id: "#samtools-in-output-file"
+      description: "BAM file to act as input to pipeline"
+    - id: "#pipeline-output-file"
       type: string
       label: "Input File"
-      description: "BAM file to act as input to samtools"
+      description: "BAM file to act as input to pipeline"
+  baseCommand: "ls"
   outputs:
-    - id: "#samtools-out-filename"
-      type: File
+    - id: "#pipeline-output"
+      type: string
       label: "Output File"
       description: "output bai file"
       outputBinding:
           glob:
              engine: cwl:JsonPointer
-             script: /job/samtools-in-output-file
-  baseCommand: "samtools"
-  arguments:
-    "index"
-  stdout:
-    engine: cwl:JsonPointer
-    script: /job/samtools-in-output-file
-
+             script: /job/pipeline-output-file
 
 - id: "#main"
   class: Workflow
-  label: "Samtools"
-  description: "run samtools on google pipeline"
+  label: "Google Pipeline"
+  description: "run a docker container on google pipeline"
   inputs:
      - id: "#project-id"
        type: string
@@ -53,23 +54,29 @@
        type: string
      - id: "#bucket"
        type: string
+     - id: "#container"
+       type: string
+     - id: "#command"
+       type: string
      - id: "#input-file"
        type: string
      - id: "#output-file"
        type: string
   outputs:
     - id: "#main.output"
-      type: File
-      source: "#samtools.samtools-out-filename"
+      type: string
+      source: "#pipeline.pipeline-output"
   steps :
     - id: "#step0"
-      run: {import: "#samtools"}
+      run: {import: "#pipeline"}
       inputs:
-        - { id: "#samtools.samtools-in-project-id" ,  source: "#project-id" }
-        - { id: "#samtools.samtools-in-service-account",  source: "#service-account" }
-        - { id: "#samtools.samtools-in-bucket",  source: "#bucket" }
-        - { id: "#samtools.samtools-in-input-file",  source: "#input-file" }
-        - { id: "#samtools.samtools-in-output-file",  source: "#output-file" }
+        - { id: "#pipeline.pipeline-project-id",  source: "#project-id" }
+        - { id: "#pipeline.pipeline-service-account",  source: "#service-account" }
+        - { id: "#pipeline.pipeline-bucket",  source: "#bucket" }
+        - { id: "#pipeline.pipeline-container",  source: "#container" }
+        - { id: "#pipeline.pipeline-command",  source: "#command" }
+        - { id: "#pipeline.pipeline-input-file",  source: "#input-file" }
+        - { id: "#pipeline.pipeline-output-file",  source: "#output-file" }
       outputs:
-        - { id: "#samtools.samtools-out-filename", default: "default-output.txt" }
+        - { id: "#pipeline.pipeline-output" }
 
