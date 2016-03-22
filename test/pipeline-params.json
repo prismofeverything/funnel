@@ -1,0 +1,9 @@
+{
+    "project-id" : "level-elevator-714",
+    "service-account" : "985014667505-compute@developer.gserviceaccount.com",
+    "bucket" : "smc-dev-test",
+    "container" : "samtools",
+    "command" : "samtools index",
+    "input-file" : "gs://genomics-public-data/ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA06986/alignment/NA06986.chromMT.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam",
+    "output-file" : "pipelines-api-examples/samtools/output/NA06986.chromMT.ILLUMINA.bwa.CEU.exon_targetted.20100311.FUNNEL.ORB.bam.bai"
+}

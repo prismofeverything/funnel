@@ -1,80 +1,46 @@
 #!/usr/bin/env cwl-runner
 
-- id: "#pipeline"
+- id: "#samtools"
   class: CommandLineTool
   inputs:
-    - id: "#pipeline-project-id"
+    - id: "#samtools-input-file"
       type: string
-      label: "Project Id"
-      description: "google apps project id"
+      label: "Input File"
+      description: "BAM file to act as input to pipeline"
       inputBinding: {}
-    - id: "#pipeline-service-account"
+    - id: "#samtools-output-file"
       type: string
-      label: "Service Account"
-      description: "service account for google cloud compute"
-    - id: "#pipeline-bucket"
-      type: string
-      label: "Bucket"
-      description: "google storage bucket name"
-    - id: "#pipeline-container"
-      type: string
-      label: "Bucket"
-      description: "docker container"
-    - id: "#pipeline-command"
-      type: string
-      label: "Bucket"
-      description: "command"
-    - id: "#pipeline-input-file"
-      type: string
-      label: "Input File"
-      description: "BAM file to act as input to pipeline"
-    - id: "#pipeline-output-file"
-      type: string
-      label: "Input File"
-      description: "BAM file to act as input to pipeline"
-  baseCommand: "ls"
+      label: "Output file"
+      description: "The file containing the result"
   outputs:
-    - id: "#pipeline-output"
-      type: string
+    - id: "#samtools-output"
+      type: File
       label: "Output File"
       description: "output bai file"
       outputBinding:
           glob:
              engine: cwl:JsonPointer
-             script: /job/pipeline-output-file
+             script: /job/samtools-output-file
+  baseCommand: ["samtools", "index"]
+  stdout:
+    engine: cwl:JsonPointer
+    script: /job/samtools-output-file
 
 - id: "#main"
   class: Workflow
-  label: "Google Pipeline"
-  description: "run a docker container on google pipeline"
+  label: "Samtools"
+  description: "run samtools on a bam file"
   inputs:
-     - id: "#project-id"
-       type: string
-     - id: "#service-account"
-       type: string
-     - id: "#bucket"
-       type: string
-     - id: "#container"
-       type: string
-     - id: "#command"
-       type: string
      - id: "#input-file"
-       type: string
-     - id: "#output-file"
        type: string
   outputs:
     - id: "#main.output"
-      type: string
-      source: "#pipeline.pipeline-output"
+      type: File
+      source: "#samtools.samtools-output"
   steps :
     - id: "#step0"
       run: {import: "#pipeline"}
       inputs:
-        - { id: "#pipeline.pipeline-project-id",  source: "#project-id" }
-        - { id: "#pipeline.pipeline-service-account",  source: "#service-account" }
-        - { id: "#pipeline.pipeline-bucket",  source: "#bucket" }
-        - { id: "#pipeline.pipeline-container",  source: "#container" }
-        - { id: "#pipeline.pipeline-command",  source: "#command" }
         - { id: "#pipeline.pipeline-input-file",  source: "#input-file" }
         - { id: "#pipeline.pipeline-output-file",  source: "#output-file" }
       outputs:
