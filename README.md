@@ -1,10 +1,10 @@
 # funnel
 
-Trigger the Google Pipeline API with CWL
+Trigger the Google Genomics Pipeline API with CWL
 
 ## Goal and Disclaimer
 
-The goal of this project is to accept a CWL file that would be used to fire a command line tool provided as a Docker container and instead trigger that container on the Google Pipeline API (GP).
+The goal of this project is to accept a CWL file that would be used to fire a command line tool provided as a Docker container and instead trigger that container on the Google Genomics Pipeline API (GP).
 
 Currently this project is incomplete. You can hand it a CWL file specifying a local input and output, but GP only accepts inputs from a Google Bucket (GB) and only outputs to a GB. The next step would be to take the input file provided to CWL and upload it to a GB, run the GP, then download the output from the output GB and provide it as the output for CWL.
 
