@@ -8,9 +8,9 @@ inputs:
     description: "bam file"
 
 outputs:
-  - id: "#bam"
+  - id: "#bai"
     type: File
-    source: "#samindex.bam_with_bai"
+    source: "#samindex.output"
 
 hints:
   - class: DockerRequirement
@@ -23,7 +23,7 @@ steps:
     inputs:
       - { id: "#samindex.input", source: "#input" }
     outputs:
-      - { id: "#samindex.bam_with_bai" }
+      - { id: "#samindex.output" }
 
 # works with the following command
 # --------------------------------

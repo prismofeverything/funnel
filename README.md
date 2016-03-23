@@ -2,9 +2,11 @@
 
 Trigger the Google Genomics Pipeline API with CWL
 
+![FUNNEL](https://github.com/prismofeverything/funnel/blob/master/resources/funnel.jpg)
+
 ## Goal and Disclaimer
 
-The goal of this project is to accept a CWL file that would be used to fire a command line tool provided as a Docker container and instead trigger that container on the Google Genomics Pipeline API (GP).
+The goal of this project is to accept a CWL file that would be used to run a command line tool provided as a Docker container and instead trigger that container on the Google Genomics Pipeline API (GP).
 
 Currently this project is incomplete. You can hand it a CWL file specifying a local input and output, but GP only accepts inputs from a Google Bucket (GB) and only outputs to a GB. The next step would be to take the input file provided to CWL and upload it to a GB, run the GP, then download the output from the output GB and provide it as the output for CWL.
 
@@ -22,8 +24,6 @@ In order to run this, you must have a [GP enabled account](https://cloud.google.
         'service-account' : 'SOMENUMBER-compute@developer.gserviceaccount.com',
         'bucket' : 'your-bucket',
         'container' : 'docker-container',
-        'command' : 'command line',
-        'input-file' : 'gs://path/to/an/input/file/in/some/bucket/somewhere',
         'output-file' : 'path/to/where/you/want/google/pipeline/to/put/your/output'
     }
 ```
@@ -31,12 +31,10 @@ In order to run this, you must have a [GP enabled account](https://cloud.google.
 Once you've done that, you can test this with the following command:
 
 ```
-python funnel.py test/samtools-workflow.cwl --input test/samtools-workflow.cwl
+python funnel.py test/samtools-workflow.cwl --input gs://genomics-public-data/ftp-trace.ncbi.nih.gov/1000genomes/ftp/technical/pilot3_exon_targetted_GRCh37_bams/data/NA06986/alignment/NA06986.chromMT.ILLUMINA.bwa.CEU.exon_targetted.20100311.bam
 ```
 
-(Notice the dumb usage of the cwl as the input file also: this is because currently the input is a pointer to a file in a GB specified inside the python script and ignores this argument entirely).
-
-This will output the results from the GP, including the informative line:
+This creates a stacktrace (we are not providing any output as `cwltool` expects since GP writes to a GB), but before that it will run the command on GP and spit out the results, including the informative line:
 
 ```
 u'name': u'operations/EP7WnIa6KhiimNLAnK-r3aYBIPGRzLvVHCoPcHJvZHVjdGlvblF1ZXVl'

@@ -19,12 +19,10 @@ inputs:
       Input bam file.
 
 outputs:
-  - id: "#bam_with_bai"
+  - id: "#output"
     type: File
     outputBinding:
-      glob: "indexed.bam"
-      secondaryFiles:
-        - ".bai"
+      glob: "indexed.bam.bai"
 
 baseCommand: ["samtools", "index"]
 
