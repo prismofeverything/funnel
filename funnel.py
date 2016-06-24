@@ -1,6 +1,8 @@
 import sys
+import math
 import time
 import json
+import random
 import string
 import threading
 
@@ -10,15 +12,9 @@ import cwltool.process
 import cwltool.workflow
 import cwltool.draft2tool
 
-# import multiprocessing
-# from multiprocessing import Process
 from pprint import pprint
 from oauth2client.client import GoogleCredentials
 from apiclient.discovery import build
-
-# import logging
-# logger = logging.getLogger('funnel.pipeline')
-# logger.setLevel(logging.INFO)
 
 class Pipeline(object):
   def __init__(self):
@@ -30,7 +26,7 @@ class Pipeline(object):
     for put in puts:
       path = puts[put]
       if replace:
-        path = path.replace("gs://", '')
+        path = path.replace('gs://', '')
 
       parameter = {
         'name': put,
@@ -177,20 +173,28 @@ class PipelineJob(object):
       mount
     )
     
-    # success = self.pipeline.poll(operation)
-    # pprint(success)
-
     collected = {output: {'path': outputs[output], 'class': 'File', 'hostfs': False} for output in outputs}
     pprint(collected)
 
     poll = PipelinePoll(self.pipeline.service, operation, collected, lambda outputs: self.output_callback(outputs, 'success'))
     poll.start()
-    
-    # success = poll.success
-    # pprint(success)
 
-    # self.output_callback(collected, 'success')
+class CommandJob(cwltool.job.CommandLineJob):
+  def __init__(self, spec):
+    super(CommandJob, self).__init__()
+    self.spec = spec
 
+  def run(self, dry_run=False, pull_image=True, **kwargs):
+    this = self
+
+    def runnnn(this, kwargs):
+      # interval = math.ceil(random.random() * 5)
+      # print("sleeping for " + str(interval))
+      # time.sleep(interval)
+      super(CommandJob, this).run(**kwargs)
+
+    thread = threading.Thread(target=runnnn, args=(this, kwargs))
+    thread.start()
 
 class PipelinePathMapper(cwltool.pathmapper.PathMapper):
   def __init__(self, referenced_files, basedir):
@@ -215,38 +219,48 @@ class PipelineTool(cwltool.draft2tool.CommandLineTool):
   def makeJobRunner(self):
     return PipelineJob(self.spec, self.pipeline, self.pipeline_args)
 
-  def makePathMapper(self, reffiles, input_basedir, **kwargs):
-    return PipelinePathMapper(reffiles, input_basedir)
+  def makePathMapper(self, reffiles, **kwargs):
+    return PipelinePathMapper(reffiles, kwargs['basedir'])
+
+class CommandTool(cwltool.draft2tool.CommandLineTool):
+  def __init__(self, spec, **kwargs):
+    super(cwltool.draft2tool.CommandLineTool, self).__init__(spec, **kwargs)
+    self.spec = spec
+    
+  def makeJobRunner(self):
+    return CommandJob(self.spec)
+
+  def makePathMapper(self, reffiles, **kwargs):
+    return cwltool.pathmapper.PathMapper(reffiles, kwargs['basedir'])
 
 class PipelineRunner(object):
   def __init__(self, pipeline, pipeline_args):
     self.pipeline = pipeline
     self.pipeline_args = pipeline_args
-    # self.lock = threading.Lock()
-    # self.cond = threading.Condition(self.lock)
-    # self.pool = multiprocessing.Pool(processes=8)
 
   def output_callback(self, out, status):
-    if status == "success":
-      print("Job completed!")
+    if status == 'success':
+      print('Job completed!')
     else:
-      print("Job failed...")
+      print('Job failed...')
     self.output = out
 
   def pipeline_make_tool(self, spec, **kwargs):
-    if "class" in spec and spec["class"] == "CommandLineTool":
-      return PipelineTool(spec, self.pipeline, self.pipeline_args, **kwargs)
+    if 'class' in spec and spec['class'] == 'CommandLineTool':
+      if 'pipeline' in kwargs:
+        return PipelineTool(spec, self.pipeline, self.pipeline_args, **kwargs)
+      else:
+        return CommandTool(spec, **kwargs)
     else:
       return cwltool.workflow.defaultMakeTool(spec, **kwargs)
 
-  def pipeline_executor(self, tool, job_order, input_basedir, args, **kwargs):
-    job = tool.job(job_order, input_basedir, self.output_callback, docker_outdir="$(task.outdir)", **kwargs)
-
+  def pipeline_executor(self, tool, job_order, **kwargs):
+    pprint(kwargs)
+    job = tool.job(job_order, self.output_callback, **kwargs)
 
     for runnable in job:
       if runnable:
         runnable.run(**kwargs)
-
 
     # jobs = map(lambda j: lambda(r, k): r.run(k), filter(lambda x: x, job))
     # self.pool.map(lambda j: j.run(**kwargs), job)
@@ -257,9 +271,9 @@ class PipelineRunner(object):
     # for runnable in job:
     #   if runnable:
     #     def run(runnable, kwargs):
-    #       print("Running! " + str(runnable))
+    #       print('Running! ' + str(runnable))
     #       runnable.run(**kwargs)
-    #       print("done running " + str(runnable))
+    #       print('done running ' + str(runnable))
 
     #     process = Process(target=run, args=[runnable, kwargs])
     #     process.start()
@@ -292,9 +306,9 @@ class PipelineRunner(object):
 
 
     # def run(runnable, kwargs):
-    #   print("Running! " + str(runnable))
+    #   print('Running! ' + str(runnable))
     #   runnable.run(**kwargs)
-    #   print("done running " + str(runnable))
+    #   print('done running ' + str(runnable))
 
     # print(job)
     # print(dir(job))
@@ -312,30 +326,27 @@ class PipelineRunner(object):
     # for thread in threads:
     #   thread.join()
         
-    print("all processes have joined")
+    print('all processes have joined')
     print(self.output)
 
     return self.output
 
 def main(args):
+  print(args)
+
   pipeline_args = {
-    'project-id': 'level-elevator-714',
-    'service-account' : '985014667505-compute@developer.gserviceaccount.com',
-    'bucket' : 'hashsplitter',
-    'container' : 'hashsplitter',
-    'output-path' : 'output'
-    # 'project-id': 'machine-generated-837',
-    # 'service-account' : 'SOMENUMBER-compute@developer.gserviceaccount.com',
-    # 'bucket' : 'your-bucket',
-    # 'container' : 'samtools',
-    # 'output-file' : 'path/to/where/you/want/google/pipeline/to/put/your/output'
+    'project-id': 'machine-generated-837',
+    'service-account' : 'SOMENUMBER-compute@developer.gserviceaccount.com',
+    'bucket' : 'your-bucket',
+    'container' : 'samtools',
+    'output-file' : 'path/to/where/you/want/google/pipeline/to/put/your/output'
   }
   
-  parser = cwltool.main.arg_parser()
+  # parser = cwltool.main.arg_parser()
   pipeline = Pipeline()
   runner = PipelineRunner(pipeline, pipeline_args)
-  cwltool.main.main(args, executor=runner.pipeline_executor, makeTool=runner.pipeline_make_tool, parser=parser)
+  cwltool.main.main(args, executor=runner.pipeline_executor, makeTool=runner.pipeline_make_tool)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   sys.exit(main(sys.argv[1:]))
 

@@ -2,7 +2,7 @@
 
 class: Workflow
 
-# cwlVersion: "draft-3"
+cwlVersion: "draft-3"
 
 inputs:
 
