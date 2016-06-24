@@ -1,25 +1,36 @@
-import string
-import json
 import sys
-from pprint import pprint
+import time
+import json
+import string
+import threading
 
-import cwltool.draft2tool
-import cwltool.workflow
 import cwltool.main
-import cwltool.process
 import cwltool.docker
+import cwltool.process
+import cwltool.workflow
+import cwltool.draft2tool
 
+import multiprocessing
+from multiprocessing import Process
+from pprint import pprint
 from oauth2client.client import GoogleCredentials
 from apiclient.discovery import build
 
-import logging
-logger = logging.getLogger('funnel.pipeline')
-logger.setLevel(logging.INFO)
+# import logging
+# logger = logging.getLogger('funnel.pipeline')
+# logger.setLevel(logging.INFO)
 
 class Pipeline(object):
   def __init__(self):
     self.credentials = GoogleCredentials.get_application_default()
     self.service = build('genomics', 'v1alpha2', credentials=self.credentials)
+
+  def poll(self, operation, poll_interval=5):
+    while not operation['done']:
+      time.sleep(poll_interval)
+      operation = self.service.operations().get(name=operation['name']).execute()
+
+    return operation
 
   def create_parameters(self, puts, replace=False):
     parameters = []
@@ -125,7 +136,8 @@ class PipelineJob(object):
     
   def run(self, dry_run=False, pull_image=True, **kwargs):
     id = self.spec['id']
-    
+    poll_interval = 5
+
     pprint(self.spec)
 
     input_ids = [input['id'].replace(id + '#', '') for input in self.spec['inputs']]
@@ -142,7 +154,7 @@ class PipelineJob(object):
     if self.spec['stdout']:
       command += ' > ' + mount + '/' + self.spec['stdout']
 
-    result = self.pipeline.funnel_to_pipeline(
+    operation = self.pipeline.funnel_to_pipeline(
       self.pipeline_args['project-id'],
       self.pipeline_args['container'],
       self.pipeline_args['service-account'],
@@ -154,7 +166,13 @@ class PipelineJob(object):
       mount
     )
     
-    self.output_callback({'pipeline-output': result}, 'success')
+    success = self.pipeline.poll(operation)
+    pprint(success)
+
+    collected = {output: {'path': outputs[output], 'class': 'File', 'hostfs': False} for output in outputs}
+    pprint(collected)
+
+    self.output_callback(collected, 'success')
 
 class PipelinePathMapper(cwltool.pathmapper.PathMapper):
   def __init__(self, referenced_files, basedir):
@@ -184,12 +202,15 @@ class PipelineRunner(object):
   def __init__(self, pipeline, pipeline_args):
     self.pipeline = pipeline
     self.pipeline_args = pipeline_args
+    self.lock = threading.Lock()
+    self.cond = threading.Condition(self.lock)
+    self.pool = multiprocessing.Pool(processes=8)
 
   def output_callback(self, out, status):
     if status == "success":
-      logger.info("Job completed!")
+      print("Job completed!")
     else:
-      logger.info("Job failed...")
+      print("Job failed...")
     self.output = out
 
   def pipeline_make_tool(self, spec, **kwargs):
@@ -201,11 +222,71 @@ class PipelineRunner(object):
   def pipeline_executor(self, tool, job_order, input_basedir, args, **kwargs):
     job = tool.job(job_order, input_basedir, self.output_callback, docker_outdir="$(task.outdir)", **kwargs)
     
+    processes = []
+    # threads = []
+
+    # jobs = map(lambda j: lambda(r, k): r.run(k), filter(lambda x: x, job))
+    # self.pool.map(lambda j: j.run(**kwargs), job)
+    # self.pool.join()
+
     for runnable in job:
       if runnable:
-        logger.info("Running! " + str(runnable))
-        runnable.run(**kwargs)
+        def run(runnable, kwargs):
+          print("Running! " + str(runnable))
+          runnable.run(**kwargs)
+          print("done running " + str(runnable))
+
+        process = Process(target=run, args=[runnable, kwargs])
+        process.start()
+        processes.append(process)
+
+    for process in processes:
+      process.join()
+
+
+    # try:
+    #     self.cond.acquire()
+
+    #     for runnable in job:
+    #         if runnable:
+    #             runnable.run(**kwargs)
+    #         else:
+    #             if self.jobs:
+    #                 self.cond.wait(1)
+    #             else:
+    #                 print('DEADLOCK')
+    #                 break
+
+    #     while self.jobs:
+    #         self.cond.wait(1)
+
+    # except:
+    #     print(sys.exc_info())
+    # finally:
+    #     self.cond.release()
+
+                # def run(runnable, kwargs):
+                #     print("Running! " + str(runnable))
+                #     runnable.run(**kwargs)
+                #     print("done running " + str(runnable))
+          
+        # process = Process(target=run, args=[runnable, kwargs])
+        # process.start()
+        # processes.append(process)
+
+        # thread = threading.Thread(target=run, args=[runnable, kwargs])
+        # thread.start()
+        # threads.append(thread)
+
+    # for process in processes:
+    #   process.join()
+
+    # for thread in threads:
+    #   thread.join()
         
+    print("all processes have joined")
+    print(self.output)
+
     return self.output
 
 def main(args):
