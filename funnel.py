@@ -10,8 +10,8 @@ import cwltool.process
 import cwltool.workflow
 import cwltool.draft2tool
 
-import multiprocessing
-from multiprocessing import Process
+# import multiprocessing
+# from multiprocessing import Process
 from pprint import pprint
 from oauth2client.client import GoogleCredentials
 from apiclient.discovery import build
@@ -24,13 +24,6 @@ class Pipeline(object):
   def __init__(self):
     self.credentials = GoogleCredentials.get_application_default()
     self.service = build('genomics', 'v1alpha2', credentials=self.credentials)
-
-  def poll(self, operation, poll_interval=5):
-    while not operation['done']:
-      time.sleep(poll_interval)
-      operation = self.service.operations().get(name=operation['name']).execute()
-
-    return operation
 
   def create_parameters(self, puts, replace=False):
     parameters = []
@@ -127,6 +120,26 @@ class PipelineParameters(object):
 
     return self.parameters
 
+class PipelinePoll(threading.Thread):
+  def __init__(self, service, operation, outputs, callback, poll_interval=5):
+    super(PipelinePoll, self).__init__()
+    self.service = service
+    self.operation = operation
+    self.poll_interval = poll_interval
+    self.outputs = outputs
+    self.callback = callback
+    self.success = None
+
+  def run(self):
+    operation = self.operation
+    while not operation['done']:
+      time.sleep(self.poll_interval)
+      operation = self.service.operations().get(name=operation['name']).execute()
+
+    pprint(operation)
+    self.success = operation
+    self.callback(self.outputs)
+
 class PipelineJob(object):
   def __init__(self, spec, pipeline, pipeline_args):
     self.spec = spec
@@ -136,8 +149,6 @@ class PipelineJob(object):
     
   def run(self, dry_run=False, pull_image=True, **kwargs):
     id = self.spec['id']
-    poll_interval = 5
-
     pprint(self.spec)
 
     input_ids = [input['id'].replace(id + '#', '') for input in self.spec['inputs']]
@@ -166,24 +177,33 @@ class PipelineJob(object):
       mount
     )
     
-    success = self.pipeline.poll(operation)
-    pprint(success)
+    # success = self.pipeline.poll(operation)
+    # pprint(success)
 
     collected = {output: {'path': outputs[output], 'class': 'File', 'hostfs': False} for output in outputs}
     pprint(collected)
 
-    self.output_callback(collected, 'success')
+    poll = PipelinePoll(self.pipeline.service, operation, collected, lambda outputs: self.output_callback(outputs, 'success'))
+    poll.start()
+    
+    # success = poll.success
+    # pprint(success)
+
+    # self.output_callback(collected, 'success')
+
 
 class PipelinePathMapper(cwltool.pathmapper.PathMapper):
   def __init__(self, referenced_files, basedir):
     self._pathmap = {}
     for src in referenced_files:
-      if src.startswith("gs://"):
+      if src.startswith('gs://'):
         ab = src
+        iiib = src.split('/')[-1]
+        self._pathmap[iiib] = (iiib, ab)
       else:
         ab = cwltool.pathmapper.abspath(src, basedir)
 
-    self._pathmap[src] = (ab, ab)
+      self._pathmap[ab] = (ab, ab)
 
 class PipelineTool(cwltool.draft2tool.CommandLineTool):
   def __init__(self, spec, pipeline, pipeline_args, **kwargs):
@@ -202,9 +222,9 @@ class PipelineRunner(object):
   def __init__(self, pipeline, pipeline_args):
     self.pipeline = pipeline
     self.pipeline_args = pipeline_args
-    self.lock = threading.Lock()
-    self.cond = threading.Condition(self.lock)
-    self.pool = multiprocessing.Pool(processes=8)
+    # self.lock = threading.Lock()
+    # self.cond = threading.Condition(self.lock)
+    # self.pool = multiprocessing.Pool(processes=8)
 
   def output_callback(self, out, status):
     if status == "success":
@@ -221,27 +241,32 @@ class PipelineRunner(object):
 
   def pipeline_executor(self, tool, job_order, input_basedir, args, **kwargs):
     job = tool.job(job_order, input_basedir, self.output_callback, docker_outdir="$(task.outdir)", **kwargs)
-    
-    processes = []
-    # threads = []
+
+
+    for runnable in job:
+      if runnable:
+        runnable.run(**kwargs)
+
 
     # jobs = map(lambda j: lambda(r, k): r.run(k), filter(lambda x: x, job))
     # self.pool.map(lambda j: j.run(**kwargs), job)
     # self.pool.join()
 
-    for runnable in job:
-      if runnable:
-        def run(runnable, kwargs):
-          print("Running! " + str(runnable))
-          runnable.run(**kwargs)
-          print("done running " + str(runnable))
 
-        process = Process(target=run, args=[runnable, kwargs])
-        process.start()
-        processes.append(process)
+    # processes = []
+    # for runnable in job:
+    #   if runnable:
+    #     def run(runnable, kwargs):
+    #       print("Running! " + str(runnable))
+    #       runnable.run(**kwargs)
+    #       print("done running " + str(runnable))
 
-    for process in processes:
-      process.join()
+    #     process = Process(target=run, args=[runnable, kwargs])
+    #     process.start()
+    #     processes.append(process)
+
+    # for process in processes:
+    #   process.join()
 
 
     # try:
@@ -265,21 +290,24 @@ class PipelineRunner(object):
     # finally:
     #     self.cond.release()
 
-                # def run(runnable, kwargs):
-                #     print("Running! " + str(runnable))
-                #     runnable.run(**kwargs)
-                #     print("done running " + str(runnable))
-          
-        # process = Process(target=run, args=[runnable, kwargs])
-        # process.start()
-        # processes.append(process)
 
-        # thread = threading.Thread(target=run, args=[runnable, kwargs])
-        # thread.start()
-        # threads.append(thread)
+    # def run(runnable, kwargs):
+    #   print("Running! " + str(runnable))
+    #   runnable.run(**kwargs)
+    #   print("done running " + str(runnable))
 
-    # for process in processes:
-    #   process.join()
+    # print(job)
+    # print(dir(job))
+
+    # threads = []
+    # for runnable in job:
+    #   if runnable:
+    #     thread = threading.Thread(target=run, args=[runnable, kwargs])
+    #     thread.start()
+    #     threads.append(thread)
+
+    # for thread in threads:
+    #   thread.start()
 
     # for thread in threads:
     #   thread.join()
@@ -291,6 +319,11 @@ class PipelineRunner(object):
 
 def main(args):
   pipeline_args = {
+    'project-id': 'level-elevator-714',
+    'service-account' : '985014667505-compute@developer.gserviceaccount.com',
+    'bucket' : 'hashsplitter',
+    'container' : 'hashsplitter',
+    'output-path' : 'output'
     # 'project-id': 'machine-generated-837',
     # 'service-account' : 'SOMENUMBER-compute@developer.gserviceaccount.com',
     # 'bucket' : 'your-bucket',
